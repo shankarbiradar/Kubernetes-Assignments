@@ -1,0 +1,141 @@
+Learning Objectives:-
+Create a PersistentVolume
+Create a PersistentVolumeClaim
+Create a MySQL Pod configured to use the PersistentVolumeClaim
+
+Problem Statement:-
+Your company needs a small database server to support a new application. They have asked you to deploy a pod running a MySQL container, but they want the data 
+to persist even if the pod is deleted or replaced. Therefore, the MySQL database pod requires persistent storage.
+
+
+You will need to do the following:-
+
+1. Create a PersistentVolume:
+	The PersistentVolume should be named mysql-pv.
+	The volume needs a capacity of 1Gi.
+	Use a storageClassName of localdisk.
+	Use the accessMode ReadWriteOnce.
+	Store the data locally on the node using a hostPath volume at the location /mnt/data.
+
+2. Create a PersistentVolumeClaim:
+	The PersistentVolumeClaim should be named mysql-pv-claim.
+	Set a resource request on the claim for 500Mi of storage.
+	Use the same storageClassName and accessModes as the PersistentVolume so that this claim can bind to the PersistentVolume.
+
+3. Create a MySQL Pod configured to use the PersistentVolumeClaim:
+	The Pod should be named mysql-pod.
+	Use the image mysql:5.6.
+	Expose the containerPort 3306.
+	Set an environment variable called MYSQL_ROOT_PASSWORD with the value password.
+	Add the PersistentVolumeClaim as a volume and mount it to the container at the path /var/lib/mysql.
+
+-----------------------------------------------------Solution----------------------------------------------------------------------------------------------
+Solution 1: First have to create PersistentVolume named as mysql-pv
+
+ vi mysql-pv.yml
+
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: mysql-pv  
+spec:
+  storageClassName: local-storage
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: "/mnt/data"
+
+$ kubectl apply -f mysql-pv.yml
+    persistentvolume/mysql-pv created
+
+$ kubectl get pv mysql-pv
+NAME       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM   STORAGECLASS    REASON   AGE
+mysql-pv   1Gi        RWO            Retain           Available           local-storage            13m
+
+           
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+   Created the one directory like data
+         $ mkdir data
+--------------------------------------------------------------------------------------------------------------------------------------------------------
+Solution 2: Ceated the PersistentVolumeClaim file named as mysql-pv-claim.
+           
+vi mysql-pv-claim.yml
+        
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-pv-claim
+spec:
+  storageClassName: local-storage
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 500Mi
+
+$ kubectl apply -f mysql-pv-claim.yml
+  persistentvolumeclaim/mysql-pv-claim created
+
+$ kubectl get pv mysql-pv
+NAME       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM                    STORAGECLASS    REASON   AGE
+mysql-pv   1Gi        RWO            Retain           Bound    default/mysql-pv-claim   local-storage            34s
+
+
+-----------------------------------------------------------------------------------------------------------------------------------------------
+Solution 3: Encode the MYSQL password
+            
+            $ echo -n 'password' | base64
+              cGFzc3dvcmQ=
+ TO create the secretpassword.yml file to store the password.
+
+vi my-secret-password.yml
+
+apiVersion: v1
+kind: Secret
+metadat:
+  name: my-password
+stringData:
+  my-key: cGFzc3dvcmQ=
+
+master $ kubectl create -f my-secret-password.yml
+secret/my-password created
+
+
+
+
+
+-- Created the MY-SQL Pod forconfiguring the Persistent Volume claim
+
+vi MY-SQL-pod.yml
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mysql-pod
+  labels: mysql-app
+spec:
+  containers:
+  -  name: mysql-pv-ctr
+     image: mysql:5.6
+     ports:
+     - name: http-port
+       containerPort: 3306
+     env:
+     - name: MYSQL_ROOT_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: my-password
+          key: mykey
+     volumeMounts:
+     - mountPath: "/var/lib/mysql"
+       name: mysql-storage
+  volumes:
+  - name: mysql-storage
+    persistentVolumeClaim:
+      claimName: mysql-pvc
+
+ $ kubectl apply -f MY-SQL-pod.yml
+    pod/mysql-pod created
+        
