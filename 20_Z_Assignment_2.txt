@@ -1,0 +1,145 @@
+Learning Objectives
+Provide the `web-gateway` Pod with Network Access to the Pods Associated with the `inventory-svc` Service
+Provide the `web-gateway` Pod with Network Access to the Pods Associated with the `customer-data-svc` Service
+
+
+Problem Statement:-
+Your company has a set of services, one called inventory-svc and another called customer-data-svc. In the interest of security, both of these services and their 
+corresponding pods have NetworkPolicies designed to restrict network communication to and from them. A new pod has just been deployed to the cluster called web-gateway, 
+and this pod need to be able to access both inventory-svc and customer-data-svc.
+
+Unfortunately, whoever designed the services and their corresponding NetworkPolicies was a little lax in creating documentation. In top of that,
+ they are not currently available to help you understand how to provide access to the services for the new pod.
+
+Examine the existing NetworkPolicies and determine how to alter the web-gateway pod so that it can access the pods associated with both services.
+
+You will not need to add, delete, or edit any NetworkPolicies in order to do this. Simply use the existing ones and modify the web-gateway pod to provide access. 
+All work can be done in the default namespace.
+
+----------------------------------------------------------Solution------------------------------------------------------------------------------------------------------------
+Step 1: Created the two services yaml files like 'inventory-svc and customer-data-svc 
+
+vi inventory-svc.yml
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: inventory-svc
+  labels:
+    app: data-app
+spec:
+  type: ClusterIP
+  ports:
+  -  port: 8080
+     targetPort: 80
+  selector:
+    app: data-app
+
+master $ vi inventory-svc.yml
+master $ kubectl create -f inventory-svc.yml
+          service/inventory-svc created
+
+master $ kubectl get svc
+NAME            TYPE        CLUSTER-IP    EXTERNAL-IP   PORT(S)          AGE
+inventory-svc   NodePort    10.99.1.140   <none>        8080:31535/TCP   43s
+kubernetes      ClusterIP   10.96.0.1     <none>        443/TCP          47m
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+vi customer-data-svc
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: customer-data-svc
+  labels:
+    app: data-app
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8080
+    targetPort: 80
+  selector:
+    app: data-app
+
+master $ vi customer-data-svc.yml
+master $ kubectl create -f customer-data-svc.yml
+          service/customer-data-svc created
+
+master $ kubectl get svc
+NAME                TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)          AGE
+customer-data-svc   ClusterIP   10.109.47.213   <none>        8080/TCP         45s
+
+kubernetes          ClusterIP   10.96.0.1       <none>        443/TCP          55m
+-------------------------------------------------------------------------------------------------------------------------------------------------------------
+-- Created the Deployment file
+
+vi web-gateway.yml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-gateway
+  labels:
+    app: data-app
+spec:
+  selector:
+   matchLabels:
+     app : data-app
+  template:
+    metadata:
+      labels: 
+        app: data-app
+    spec:
+      containers:
+      - name: nginx-ctr
+        image: nginx
+        ports:
+        - name: http-port
+          containerPort: 80
+
+master $ vi web-gateway.yml
+master $ kubectl create -f web-gateway.yml
+          deployment.apps/web-gateway created
+
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Step 2: have to create NetworkPolicy yml file
+
+vi networkpolicy.yml
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: web-gateway
+  namespace: default
+spec:
+  podSelector:
+    matchLabels:
+       app: secure-app
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  from:
+  - namespaceSelector:
+        matchLabels:
+          app: data-app
+          allow-access: "true"
+    ports:
+    - protocol: TCP
+      port: 8080    
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          allow-access: "true"               
+    ports:
+    - protocol: TCP
+      port: 8080
+     
+
+master $ vi network-policy.yml
+master $ kubectl apply -f network-policy.yml
+    networkpolicy.networking.k8s.io/network-policy created
+
+    
